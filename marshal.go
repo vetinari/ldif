@@ -4,8 +4,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"gopkg.in/ldap.v2"
 	"io"
+
+	"gopkg.in/ldap.v2"
 )
 
 var foldWidth = 76
@@ -17,7 +18,7 @@ var ErrMixed = errors.New("cannot mix change records and content records")
 // Marshal returns an LDIF string from the given LDIF.
 //
 // The default line lenght is 76 characters. This can be changed by setting
-// the fw parameter to something else than 0.
+// the FoldWidth struct member of the *LDIF to something else than 0.
 // For a fold width < 0, no folding will be done, with 0, the default is used.
 func Marshal(l *LDIF) (data string, err error) {
 	hasEntry := false
@@ -70,50 +71,44 @@ func Marshal(l *LDIF) (data string, err error) {
 			}
 			data += foldLine("dn: "+e.Modify.DN, fw) + "\n"
 			data += "changetype: modify\n"
-			for _, mod := range e.Modify.AddAttributes {
-				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
-				}
-
-				data += "add: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+			for _, change := range e.Modify.Changes {
+				mod := change.Modification
+				switch change.Operation {
+				case ldap.AddAttribute:
+					data += "add: " + mod.Type + "\n"
+					for _, v := range mod.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
-				}
-				data += "-\n"
-			}
-			for _, mod := range e.Modify.DeleteAttributes {
-				data += "delete: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+					data += "-\n"
+				case ldap.DeleteAttribute:
+					data += "delete: " + mod.Type + "\n"
+					for _, v := range mod.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
-				}
-				data += "-\n"
-			}
-			for _, mod := range e.Modify.ReplaceAttributes {
-				if len(mod.Vals) == 0 {
-					return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
-				}
-				data += "replace: " + mod.Type + "\n"
-				for _, v := range mod.Vals {
-					ev, t := encodeValue(v)
-					col := ": "
-					if t {
-						col = ":: "
+					data += "-\n"
+				case ldap.ReplaceAttribute:
+					data += "replace: " + mod.Type + "\n"
+					for _, v := range mod.Vals {
+						ev, t := encodeValue(v)
+						col := ": "
+						if t {
+							col = ":: "
+						}
+						data += foldLine(mod.Type+col+ev, fw) + "\n"
 					}
-					data += foldLine(mod.Type+col+ev, fw) + "\n"
+					data += "-\n"
 				}
-				data += "-\n"
 			}
-
 		default:
 			hasEntry = true
 			if hasChange {
@@ -178,7 +173,8 @@ func foldLine(line string, fw int) (folded string) {
 // *ldap.DelRequest, *ldap.ModifyRequest and *ldap.ModifyDNRequest or slices
 // of any of those.
 //
-// See Marshal() for the fw argument.
+// The fw parameter sets the FoldWidth of the internally used *LDIF,
+// see Marshal() for a description.
 func Dump(fh io.Writer, fw int, entries ...interface{}) error {
 	l, err := ToLDIF(entries...)
 	if err != nil {

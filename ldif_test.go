@@ -1,8 +1,11 @@
 package ldif_test
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-ldap/ldif"
@@ -255,5 +258,51 @@ telephonenumber: +1 408 555 1212
 func TestLDIFVersionOnSecond(t *testing.T) {
 	if _, err := ldif.Parse(ldifVersionOnSecond); err == nil {
 		t.Errorf("did not fail to parse LDIF")
+	}
+}
+
+func TestLDIFChannel(t *testing.T) {
+	src := bytes.NewBuffer([]byte(ldifRFC2849Example))
+	ch := make(chan *ldif.Entry)
+	res := make(chan string)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		for e := range ch {
+			t.Logf("ENTRY=%s\n", e.Entry)
+			buf := bytes.NewBuffer(nil)
+			ldif.Dump(buf, 0, e.Entry)
+			res <- buf.String()
+		}
+		close(res)
+		wg.Done()
+	}()
+
+	var ret string
+	go func() {
+		n := 0
+		for s := range res {
+			if n == 0 {
+				ret = s
+			}
+			n++
+		}
+		wg.Done()
+	}()
+
+	ld := &ldif.LDIF{Chan: ch}
+	err := ldif.Unmarshal(src, ld)
+	if err != nil {
+		t.Errorf("failed to parse LDIF: %s", err)
+	}
+	close(ch)
+	wg.Wait()
+
+	out := strings.Split(ret, "\n")
+	if out[0] != `dn: cn=Barbara Jensen, ou=Product Development, dc=airius, dc=com` {
+		t.Errorf("wrong dn line")
+	}
+	if len(out) != 13 { // 13: trailing empty line
+		t.Errorf("output not as expected: >>%#v<<", out)
 	}
 }
