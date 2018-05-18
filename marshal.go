@@ -71,44 +71,50 @@ func Marshal(l *LDIF) (data string, err error) {
 			}
 			data += foldLine("dn: "+e.Modify.DN, fw) + "\n"
 			data += "changetype: modify\n"
-			for _, change := range e.Modify.Changes {
-				mod := change.Modification
-				switch change.Operation {
-				case ldap.AddAttribute:
-					data += "add: " + mod.Type + "\n"
-					for _, v := range mod.Vals {
-						ev, t := encodeValue(v)
-						col := ": "
-						if t {
-							col = ":: "
-						}
-						data += foldLine(mod.Type+col+ev, fw) + "\n"
-					}
-					data += "-\n"
-				case ldap.DeleteAttribute:
-					data += "delete: " + mod.Type + "\n"
-					for _, v := range mod.Vals {
-						ev, t := encodeValue(v)
-						col := ": "
-						if t {
-							col = ":: "
-						}
-						data += foldLine(mod.Type+col+ev, fw) + "\n"
-					}
-					data += "-\n"
-				case ldap.ReplaceAttribute:
-					data += "replace: " + mod.Type + "\n"
-					for _, v := range mod.Vals {
-						ev, t := encodeValue(v)
-						col := ": "
-						if t {
-							col = ":: "
-						}
-						data += foldLine(mod.Type+col+ev, fw) + "\n"
-					}
-					data += "-\n"
+			for _, mod := range e.Modify.AddAttributes {
+				if len(mod.Vals) == 0 {
+					return "", errors.New("changetype 'modify', op 'add' requires non empty value list")
 				}
+
+				data += "add: " + mod.Type + "\n"
+				for _, v := range mod.Vals {
+					ev, t := encodeValue(v)
+					col := ": "
+					if t {
+						col = ":: "
+					}
+					data += foldLine(mod.Type+col+ev, fw) + "\n"
+				}
+				data += "-\n"
 			}
+			for _, mod := range e.Modify.DeleteAttributes {
+				data += "delete: " + mod.Type + "\n"
+				for _, v := range mod.Vals {
+					ev, t := encodeValue(v)
+					col := ": "
+					if t {
+						col = ":: "
+					}
+					data += foldLine(mod.Type+col+ev, fw) + "\n"
+				}
+				data += "-\n"
+			}
+			for _, mod := range e.Modify.ReplaceAttributes {
+				if len(mod.Vals) == 0 {
+					return "", errors.New("changetype 'modify', op 'replace' requires non empty value list")
+				}
+				data += "replace: " + mod.Type + "\n"
+				for _, v := range mod.Vals {
+					ev, t := encodeValue(v)
+					col := ": "
+					if t {
+						col = ":: "
+					}
+					data += foldLine(mod.Type+col+ev, fw) + "\n"
+				}
+				data += "-\n"
+			}
+
 		default:
 			hasEntry = true
 			if hasChange {

@@ -23,6 +23,7 @@ type Entry struct {
 	Add    *ldap.AddRequest
 	Del    *ldap.DelRequest
 	Modify *ldap.ModifyRequest
+	//	ModifyDN *ldap.ModifyDNRequest
 }
 
 // The LDIF struct is used for parsing an LDIF. The Controls
@@ -94,7 +95,7 @@ func ParseWithChannel(r io.Reader, ch chan *Entry) error {
 
 // Unmarshal parses the LDIF from the given io.Reader into the LDIF struct.
 // The caller is responsible for closing the io.Reader if that is
-// needed.
+// needed. When l.Chan is non nil, this function closes if before returning.
 func Unmarshal(r io.Reader, l *LDIF) (err error) {
 	if r == nil {
 		return &ParseError{Line: 0, Message: "No reader present"}
@@ -105,6 +106,9 @@ func Unmarshal(r io.Reader, l *LDIF) (err error) {
 	isComment := false
 
 	reader := bufio.NewReader(r)
+	if l.Chan != nil {
+		defer close(l.Chan)
+	}
 
 	var lines []string
 	var line, nextLine string
