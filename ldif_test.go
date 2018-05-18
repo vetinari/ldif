@@ -295,7 +295,6 @@ func TestLDIFChannel(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to parse LDIF: %s", err)
 	}
-	close(ch)
 	wg.Wait()
 
 	out := strings.Split(ret, "\n")
